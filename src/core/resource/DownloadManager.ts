@@ -288,18 +288,20 @@ class SongDownloadStrategy implements DownloadStrategy {
           .map((s) => s.key);
         const artist =
           (Array.isArray(this.song.artists)
-            ? this.song.artists.map((a) => a.name).join("/")
+            ? this.song.artists.map((a) => a.name).join(" & ")
             : this.song.artists) || "";
         const keyWord = `${this.song.name}-${artist}`;
 
         if (servers.length > 0) {
           const results = await Promise.allSettled(
             servers.map((server) =>
-              unlockSongUrl(this.song.id, keyWord, server).then((result) => ({
-                server,
-                result,
-                success: result.code === 200 && !!result.url,
-              })),
+              unlockSongUrl(this.song.id, keyWord, server, this.song.name, String(artist)).then(
+                (result) => ({
+                  server,
+                  result,
+                  success: result.code === 200 && !!result.url,
+                }),
+              ),
             ),
           );
 

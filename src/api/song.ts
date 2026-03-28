@@ -63,8 +63,14 @@ export const songUrl = (
 };
 
 // 获取解锁歌曲 URL
-export const unlockSongUrl = (id: number, keyword: string, server: SongUnlockServer) => {
-  const params = server === SongUnlockServer.NETEASE ? { id } : { keyword };
+export const unlockSongUrl = (
+  id: number,
+  keyword: string,
+  server: SongUnlockServer,
+  songName?: string,
+  artist?: string,
+) => {
+  const params = server === SongUnlockServer.NETEASE ? { id } : { keyword, songName, artist };
   return request({
     baseURL: "/api/unblock",
     url: `/${server}`,
