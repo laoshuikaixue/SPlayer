@@ -12,6 +12,7 @@ import { QualityType, type SongType, type AudioSourceType } from "@/types/main";
 import { isLogin } from "@/utils/auth";
 import { isElectron } from "@/utils/env";
 import { formatSongsList } from "@/utils/format";
+import { toFileUrl } from "@/utils/fileUrl";
 import { AI_AUDIO_LEVELS } from "@/utils/meta";
 import { handleSongQuality } from "@/utils/helper";
 import { openUserLogin } from "@/utils/modal";
@@ -154,7 +155,7 @@ class SongManager {
         );
         if (cachePath) {
           console.log(`🚀 [${id}] 由本地音乐缓存提供`);
-          return `file://${cachePath}`;
+          return toFileUrl(cachePath);
         }
       } catch (e) {
         console.error(`❌ [${id}] 检查缓存失败:`, e);
@@ -492,8 +493,8 @@ class SongManager {
         console.error("❌ 本地文件不存在");
         return { id: song.id, url: undefined };
       }
-      const encodedPath = song.path.replace(/#/g, "%23").replace(/\?/g, "%3F");
-      return { id: song.id, url: `file://${encodedPath}`, source: "local" };
+      const fileUrl = toFileUrl(song.path);
+      return { id: song.id, url: fileUrl, source: "local" };
     }
 
     // Stream songs (Subsonic / Jellyfin)

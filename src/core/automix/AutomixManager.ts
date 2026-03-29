@@ -15,6 +15,7 @@ import { isAudioAnalysis, isTransitionProposal, isAdvancedTransition } from "@/u
 import type { SongType } from "@/types/main";
 import { isElectron } from "@/utils/env";
 import { msToTime } from "@/utils/time";
+import { toFileUrl } from "@/utils/fileUrl";
 
 /**
  * 自动混音（Automix）管理器
@@ -177,8 +178,7 @@ export class AutomixManager {
       const songManager = useSongManager();
       const cachedPath = await songManager.ensureMusicCachePath(songId, audioSourceUrl, quality);
       if (cachedPath) {
-        const encodedPath = cachedPath.replace(/#/g, "%23").replace(/\?/g, "%3F");
-        return `file://${encodedPath}`;
+        return toFileUrl(cachedPath);
       }
     }
     return audioSourceUrl;

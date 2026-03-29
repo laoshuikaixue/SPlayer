@@ -3,6 +3,7 @@ import { app } from "electron";
 import { connect } from "net";
 import { join } from "path";
 import { existsSync, unlinkSync } from "fs";
+import { fileURLToPath } from "url";
 import { processLog } from "../logger";
 import mainWindow from "../windows/main-window";
 
@@ -129,7 +130,7 @@ export class MpvService {
 
       // 连接成功后再加载文件，确保能收到 file-loaded/playback-restart
       if (url) {
-        this.sendCommand("loadfile", [url, "replace"]);
+        this.sendCommand("loadfile", [this.normalizeMpvLoadTarget(url), "replace"]);
       }
     } catch (error) {
       processLog.error("启动 MPV 失败:", error);
@@ -476,5 +477,41 @@ export class MpvService {
     this.observationMap.clear();
     this.mpvProcessNonce = null;
     this.pendingFileLoaded = null;
+  }
+
+  private normalizeMpvLoadTarget(url?: string) {
+    if (!url) return "";
+    if (!url.startsWith("file://")) {
+      return this.normalizeLocalPath(url);
+    }
+
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.host) {
+        const uncPath = `//${parsedUrl.host}${decodeURIComponent(parsedUrl.pathname)}`;
+        return this.normalizeLocalPath(uncPath);
+      }
+    } catch (e) {
+      processLog.warn(`[MpvService] 使用 'new URL()' 解析 URL 失败，将执行回退逻辑: ${url}`, e);
+      // 忽略 URL 解析失败，继续走兜底逻辑
+    }
+
+    try {
+      return this.normalizeLocalPath(fileURLToPath(url));
+    } catch {
+      const rawPath = decodeURIComponent(url.slice("file://".length));
+      return this.normalizeLocalPath(rawPath);
+    }
+  }
+
+  private normalizeLocalPath(filePath: string) {
+    if (process.platform !== "win32") return filePath;
+    if (filePath.startsWith("//")) {
+      return filePath.replace(/\//g, "\\");
+    }
+    if (/^[A-Za-z]:\//.test(filePath)) {
+      return filePath.replace(/\//g, "\\");
+    }
+    return filePath;
   }
 }
