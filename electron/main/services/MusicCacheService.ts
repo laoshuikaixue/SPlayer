@@ -13,6 +13,19 @@ export class MusicCacheService {
   private static instance: MusicCacheService;
   private cacheService: CacheService;
   private downloadingTasks: Map<string, Promise<string>> = new Map();
+  /** 音质优先级 */
+  private readonly qualityPriority: Record<string, number> = {
+    "master": 100,
+    "dolby": 95,
+    "spatial": 90,
+    "surround": 85,
+    "hi-res": 80,
+    "sq": 70,
+    "hq": 60,
+    "mq": 50,
+    "lq": 40,
+    "standard": 40,
+  };
 
   private constructor() {
     this.cacheService = CacheService.getInstance();
@@ -35,6 +48,54 @@ export class MusicCacheService {
   }
 
   /**
+   * 从缓存文件名中提取音质标识
+   */
+  private getQualityFromKey(id: number | string, key: string): string | null {
+    const prefix = `${id}_`;
+    if (!key.startsWith(prefix) || !key.endsWith(".sc")) {
+      return null;
+    }
+    return key.slice(prefix.length, -3);
+  }
+
+  /**
+   * 获取音质权重
+   */
+  private getQualityWeight(quality: string): number {
+    return this.qualityPriority[quality.toLowerCase()] ?? 0;
+  }
+
+  /**
+   * 按音质优先级和最近修改时间筛选候选缓存
+   */
+  private async pickCandidates(
+    id: number | string,
+  ): Promise<Array<{ filePath: string; quality: string }>> {
+    const items = await this.cacheService.list("music");
+    const result: Array<{ filePath: string; quality: string; weight: number; mtime: number }> = [];
+    for (const item of items) {
+      const quality = this.getQualityFromKey(id, item.key);
+      if (!quality) {
+        continue;
+      }
+      const filePath = this.cacheService.getFilePath("music", item.key);
+      result.push({
+        filePath,
+        quality,
+        weight: this.getQualityWeight(quality),
+        mtime: item.mtime,
+      });
+    }
+    result.sort((a, b) => {
+      if (b.weight !== a.weight) {
+        return b.weight - a.weight;
+      }
+      return b.mtime - a.mtime;
+    });
+    return result.map(({ filePath, quality }) => ({ filePath, quality }));
+  }
+
+  /**
    * 计算文件 MD5
    */
   private async calculateMD5(filePath: string): Promise<string> {
@@ -49,60 +110,62 @@ export class MusicCacheService {
 
   /**
    * 检查缓存是否存在
-   * 如果 quality 为 undefined，则返回任意一个匹配 id 的缓存（如果存在）
-   * 如果提供了 expectedMD5，则会校验文件 MD5，不一致则删除缓存并返回 null
+   * 指定 quality 时仅检查目标音质
+   * 未指定 quality 时按音质优先级和最近修改时间选择候选缓存
+   * 提供 expectedMD5 时会校验文件哈希，不一致则删除旧缓存
    */
   public async hasCache(
     id: number | string,
     quality?: string,
     expectedMD5?: string,
   ): Promise<string | null> {
-    let filePath: string | null = null;
-
-    // 1. 精确查找：如果指定了音质，直接检查对应文件是否存在
+    const candidates: Array<{ filePath: string; quality: string }> = [];
     if (quality) {
       const key = this.getCacheKey(id, quality);
       try {
         const p = this.cacheService.getFilePath("music", key);
         if (existsSync(p)) {
-          filePath = p;
+          candidates.push({ filePath: p, quality });
         }
-      } catch {
-        // ignore
+      } catch (e) {
+        cacheLog.warn(`[MusicCache] 检查精确缓存失败，ID: ${id}, 音质: ${quality}:`, e);
       }
     } else {
-      // 2. 模糊查找：如果未指定音质，查找该 ID 下的任意缓存文件
       try {
-        const items = await this.cacheService.list("music");
-        // 查找以 id_ 开头且以 .sc 结尾的文件
-        const prefix = `${id}_`;
-        const match = items.find((item) => item.key.startsWith(prefix) && item.key.endsWith(".sc"));
-        if (match) {
-          filePath = this.cacheService.getFilePath("music", match.key);
-        }
-      } catch {
-        // ignore
+        candidates.push(...(await this.pickCandidates(id)));
+      } catch (e) {
+        cacheLog.warn(`[MusicCache] 获取候选缓存失败，ID: ${id}:`, e);
       }
     }
 
-    // 如果找到文件且需要校验 MD5
-     if (filePath && expectedMD5) {
-       try {
-         const fileMD5 = await this.calculateMD5(filePath);
-         if (fileMD5.toLowerCase() !== expectedMD5.toLowerCase()) {
-            cacheLog.info(
-              `[MusicCache] 缓存 MD5 不匹配，删除旧缓存。ID: ${id}, 期望: ${expectedMD5}, 实际: ${fileMD5}`,
-            );
-            await unlink(filePath).catch(() => {});
+    for (const candidate of candidates) {
+      const { filePath, quality: candidateQuality } = candidate;
+      // 无需校验哈希时，命中即返回
+      if (!expectedMD5) {
+        return filePath;
+      }
+      try {
+        const fileMD5 = await this.calculateMD5(filePath);
+        if (fileMD5.toLowerCase() !== expectedMD5.toLowerCase()) {
+          cacheLog.info(
+            `[MusicCache] 缓存 MD5 不匹配，删除旧缓存。ID: ${id}, 音质: ${candidateQuality}, 期望: ${expectedMD5}, 实际: ${fileMD5}`,
+          );
+          await unlink(filePath).catch(() => {});
+          if (quality) {
             return null;
           }
-       } catch (error) {
-         cacheLog.error(`[MusicCache] Failed to calculate MD5 for ${filePath}:`, error);
-         return null;
-       }
-     }
+          continue;
+        }
+        return filePath;
+      } catch (error) {
+        cacheLog.error(`[MusicCache] 校验缓存 MD5 失败，路径: ${filePath}:`, error);
+        if (quality) {
+          return null;
+        }
+      }
+    }
 
-    return filePath;
+    return null;
   }
 
   /**
