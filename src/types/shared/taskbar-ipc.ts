@@ -5,16 +5,14 @@ export type Milliseconds = number;
 export interface TaskbarConfig {
   /** 模式 */
   mode: "taskbar" | "floating";
-  /** 最大宽度 */
+  /** 宽度自动——开启时占满可用空间，关闭时按 maxWidth 限制 */
+  autoMaxWidth: boolean;
+  /** 最大宽度（逻辑像素）——仅在 autoMaxWidth 关闭时生效，超出可用空间时以可用空间为准 */
   maxWidth: number;
   /** 位置 */
   position: "automatic" | "left" | "right";
-  /** 自动收缩 */
-  autoShrink: boolean;
   /** 边距 */
   margin: number;
-  /** 最小宽度 */
-  minWidth: number;
   /** 悬浮对齐 */
   floatingAlign: "left" | "right";
   /** 悬浮自动宽度 */
@@ -120,11 +118,10 @@ export type SyncStatePayload =
 /** 默认任务栏歌词配置 */
 export const DEFAULT_TASKBAR_CONFIG: TaskbarConfig = {
   mode: "taskbar",
-  maxWidth: 30,
+  autoMaxWidth: true,
+  maxWidth: 400,
   position: "automatic",
-  autoShrink: false,
   margin: 10,
-  minWidth: 10,
   floatingAlign: "right",
   floatingAutoWidth: true,
   floatingWidth: 300,

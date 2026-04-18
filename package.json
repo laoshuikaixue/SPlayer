@@ -39,8 +39,8 @@
     "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
-    "@applemusic-like-lyrics/core": "^0.2.0",
-    "@applemusic-like-lyrics/lyric": "^0.3.0",
+    "@applemusic-like-lyrics/core": "^0.3.2",
+    "@applemusic-like-lyrics/lyric": "^0.4.1",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@imsyy/color-utils": "^1.0.2",

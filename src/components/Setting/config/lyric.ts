@@ -993,43 +993,38 @@ export const useLyricSettings = (): SettingConfig => {
             }),
           },
           {
+            key: "taskbarLyricAutoMaxWidth",
+            label: "宽度自动",
+            type: "switch",
+            description: "开启后占满任务栏的可用空间；关闭后按最大宽度限制",
+            show: () => taskbarLyricConfig.mode === "taskbar",
+            value: computed({
+              get: () => taskbarLyricConfig.autoMaxWidth,
+              set: (v) => {
+                taskbarLyricConfig.autoMaxWidth = v ?? true;
+                saveTaskbarLyricConfig({ autoMaxWidth: taskbarLyricConfig.autoMaxWidth });
+              },
+            }),
+          },
+          {
             key: "taskbarLyricMaxWidth",
             label: "最大宽度",
             type: "slider",
-            description: "任务栏歌词的最大宽度占屏幕比例",
-            min: 10,
-            max: 100,
-            step: 1,
+            description: "超出可用空间时仍以可用空间为准，避免挤占",
+            show: () => taskbarLyricConfig.mode === "taskbar" && !taskbarLyricConfig.autoMaxWidth,
+            min: 200,
+            max: 800,
+            step: 20,
             value: computed({
               get: () => taskbarLyricConfig.maxWidth,
               set: (v) => {
-                taskbarLyricConfig.maxWidth = v ?? 30;
+                taskbarLyricConfig.maxWidth = v ?? 400;
               },
             }),
             action: () => {
               saveTaskbarLyricConfig({ maxWidth: taskbarLyricConfig.maxWidth });
             },
-            suffix: "%",
-          },
-          {
-            key: "taskbarLyricMinWidth",
-            label: "最小宽度",
-            type: "slider",
-            description: "任务栏歌词可用空间低于此比例时自动隐藏",
-            show: () => taskbarLyricConfig.mode === "taskbar",
-            min: 0,
-            max: 50,
-            step: 1,
-            value: computed({
-              get: () => taskbarLyricConfig.minWidth,
-              set: (v) => {
-                taskbarLyricConfig.minWidth = v ?? 10;
-              },
-            }),
-            action: () => {
-              saveTaskbarLyricConfig({ minWidth: taskbarLyricConfig.minWidth });
-            },
-            suffix: "%",
+            suffix: "px",
           },
           {
             key: "taskbarLyricMargin",
@@ -1048,33 +1043,6 @@ export const useLyricSettings = (): SettingConfig => {
               },
             }),
             defaultValue: 10,
-          },
-          {
-            key: "taskbarLyricAutoShrink",
-            label: "自动收缩",
-            type: "switch",
-            description: "关闭后将固定占据设置的最大宽度",
-            show: () => taskbarLyricConfig.mode === "taskbar",
-            value: computed({
-              get: () => taskbarLyricConfig.autoShrink,
-              set: (v) => {
-                if (v) {
-                  window.$dialog.warning({
-                    title: "提示",
-                    content: "可能会导致右侧对齐的任务栏歌词异常抖动，是否开启？",
-                    positiveText: "开启",
-                    negativeText: "取消",
-                    onPositiveClick: () => {
-                      taskbarLyricConfig.autoShrink = true;
-                      saveTaskbarLyricConfig({ autoShrink: true });
-                    },
-                  });
-                } else {
-                  taskbarLyricConfig.autoShrink = false;
-                  saveTaskbarLyricConfig({ autoShrink: false });
-                }
-              },
-            }),
           },
           {
             key: "taskbarLyricPosition",

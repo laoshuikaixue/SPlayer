@@ -56,6 +56,7 @@
 
 <script setup lang="ts">
 import { LyricLineMouseEvent, type LyricLine } from "@applemusic-like-lyrics/core";
+import { type LyricPlayerRef } from "@/components/AMLL/LyricPlayer.vue";
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { getLyricLanguage } from "@/utils/format";
 import { usePlayerController } from "@/core/player/PlayerController";
@@ -75,7 +76,7 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const player = usePlayerController();
 
-const lyricPlayerRef = ref<any | null>(null);
+const lyricPlayerRef = ref<LyricPlayerRef | null>(null);
 
 // 当前歌词
 const amLyricsData = computed(() => {
@@ -94,7 +95,7 @@ const amLyricsData = computed(() => {
     // 处理显隐
     if (!showTran) line.translatedLyric = "";
     if (!showRoma) line.romanLyric = "";
-    if (!showWordsRoma) line.words?.forEach((word) => (word.romanWord = ""));
+    if (!showWordsRoma) line.words?.forEach((word) => delete word.romanWord);
     // 调换翻译与音译位置
     if (swapTranRoma) {
       const temp = line.translatedLyric;
@@ -115,29 +116,44 @@ const hasDuet = computed(() => amLyricsData.value?.some((line) => line.isDuet) ?
 // 进度跳转
 const jumpSeek = (line: LyricLineMouseEvent) => {
   const lineContent = line.line.getLine();
-  if (!lineContent?.startTime) return;
-  const time = lineContent.startTime;
+  const lyricTargetTime = lineContent?.startTime;
+  if (
+    typeof lyricTargetTime !== "number" ||
+    !Number.isFinite(lyricTargetTime) ||
+    lyricTargetTime < 0
+  ) {
+    return;
+  }
+  // 让 LyricPlayer 跳转到目标时间，第二个参数 isSeek = true 会重置滚动状态
+  lyricPlayerRef.value?.setCurrentTime(lyricTargetTime, true);
+  // 获取偏移时间，计算歌曲真实的目标时间，并跳转
   const offsetMs = statusStore.getSongOffset(musicStore.playSong?.id);
-  player.setSeek(time - offsetMs);
+  const musicTargetTime = lyricTargetTime - offsetMs;
+  player.setSeek(musicTargetTime);
   player.play();
 };
 
 // 处理歌词语言
 const processLyricLanguage = (player = lyricPlayerRef.value) => {
-  const lyricLineObjects = player?.lyricPlayer?.currentLyricLineObjects;
+  const lyricLineObjects = player?.currentLyricLineObjects;
   if (!Array.isArray(lyricLineObjects) || lyricLineObjects.length === 0) {
     return;
   }
   // 遍历歌词行
   for (let e of lyricLineObjects) {
     // 获取歌词行内容 (合并逐字歌词为一句)
-    const content = e.lyricLine.words.map((word: any) => word.word).join("");
+    const content = e.lyricLine.words.map((word) => word.word).join("");
     // 跳过空行
     if (!content) continue;
     // 获取歌词语言
     const lang = getLyricLanguage(content);
     // 为主歌词设置 lang 属性 (firstChild 获取主歌词 不为翻译和音译设置属性)
-    e.element.firstChild.setAttribute("lang", lang);
+    const lyricMainLineElement = e.element?.firstChild;
+    if (lyricMainLineElement instanceof HTMLElement) {
+      lyricMainLineElement.setAttribute("lang", lang);
+    } else {
+      console.warn("无法获取歌词行元素的主歌词部分，无法设置 lang 属性", e.element);
+    }
   }
 };
 

@@ -721,7 +721,7 @@ class LyricManager {
             word: line.words?.map((w) => w.word)?.join("") || "",
             startTime: line.startTime || 0,
             endTime: line.endTime || 0,
-            romanWord: line.words?.map((w) => w.romanWord)?.join("") || "",
+            romanWord: line.words?.map((w) => w.romanWord)?.join("") || undefined,
           },
         ],
       }));

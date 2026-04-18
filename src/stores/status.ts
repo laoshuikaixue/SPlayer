@@ -316,7 +316,8 @@ export const useStatusStore = defineStore("status", {
     },
     /**
      * 获取指定歌曲的偏移
-     * 单位：毫秒
+     * @param songId 歌曲 id
+     * @returns 歌曲的偏移量（单位：毫秒，正值为歌词提前），默认为 0
      */
     getSongOffset(songId?: number): number {
       if (!songId) return 0;
@@ -326,7 +327,7 @@ export const useStatusStore = defineStore("status", {
     /**
      * 设置指定歌曲的偏移
      * @param songId 歌曲 id
-     * @param offset 偏移量（单位：毫秒）
+     * @param offset 偏移量（单位：毫秒，正值为歌词提前）
      */
     setSongOffset(songId?: number, offset: number = 0) {
       if (!songId) return;
@@ -344,7 +345,7 @@ export const useStatusStore = defineStore("status", {
     /**
      * 调整指定歌曲的偏移（增量）
      * @param songId 歌曲 id
-     * @param delta 偏移增量（单位：毫秒，默认 500ms）
+     * @param delta 偏移增量（单位：毫秒，默认 500ms，正值为歌词提前）
      */
     incSongOffset(songId?: number, delta: number = 500) {
       if (!songId) return;

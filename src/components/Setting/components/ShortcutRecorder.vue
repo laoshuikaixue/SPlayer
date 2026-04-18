@@ -1,34 +1,43 @@
 <template>
   <n-flex :wrap="false" align="center" style="width: 460px; justify-content: flex-end">
     <!-- 本地/页面内快捷键 -->
-    <n-input
-      :value="shortcutItem.shortcut"
-      placeholder="快捷键为空"
-      readonly
-      class="shortcut-input"
-      @focus="onFocus(false)"
-      @blur="onBlur"
-      @keydown.stop="onKeyDown"
-      @keyup="keyHandled = ''"
-    />
-    <!-- 全局快捷键 -->
-    <n-input
-      v-if="allowGlobal"
-      :value="shortcutItem.globalShortcut"
-      :disabled="!shortcutStore.globalOpen"
-      :status="shortcutItem.globalShortcut && shortcutItem.isRegistered ? 'error' : undefined"
-      placeholder="快捷键为空"
-      readonly
-      class="shortcut-input"
-      @focus="onFocus(true)"
-      @blur="onBlur"
-      @keydown.stop="onKeyDown"
-      @keyup="keyHandled = ''"
-    >
-      <template #prefix>
-        <n-text :depth="3">全局</n-text>
+    <n-popover trigger="focus">
+      <template #trigger>
+        <n-input
+          :value="shortcutItem.shortcut"
+          placeholder="未设置"
+          readonly
+          class="shortcut-input"
+          @focus="onFocus(false)"
+          @blur="onBlur"
+          @keydown.stop="onKeyDown"
+          @keyup="keyHandled = ''"
+        />
       </template>
-    </n-input>
+      <n-text>正在设置快捷键，按 Backspace 删除快捷键</n-text>
+    </n-popover>
+    <!-- 全局快捷键 -->
+    <n-popover trigger="focus" v-if="allowGlobal">
+      <template #trigger>
+        <n-input
+          :value="shortcutItem.globalShortcut"
+          :disabled="!shortcutStore.globalOpen"
+          :status="shortcutItem.globalShortcut && shortcutItem.isRegistered ? 'error' : undefined"
+          placeholder="未设置"
+          readonly
+          class="shortcut-input"
+          @focus="onFocus(true)"
+          @blur="onBlur"
+          @keydown.stop="onKeyDown"
+          @keyup="keyHandled = ''"
+        >
+          <template #prefix>
+            <n-text :depth="3">全局</n-text>
+          </template>
+        </n-input>
+      </template>
+      <n-text>正在设置快捷键，按 Backspace 删除快捷键</n-text>
+    </n-popover>
   </n-flex>
 </template>
 
@@ -187,6 +196,11 @@ const changeShortcut = async (shortcut: string) => {
   shortcutStore.shortcutList[props.shortcutKey][targetKey] = shortcut;
 };
 
+const isSameShortcut = (shortcut: string) => {
+  const targetKey = isGlobalFocus.value ? "globalShortcut" : "shortcut";
+  return shortcutStore.shortcutList[props.shortcutKey][targetKey] === shortcut;
+};
+
 const onKeyDown = async (e: KeyboardEvent) => {
   e.preventDefault();
   e.stopPropagation();
@@ -195,8 +209,16 @@ const onKeyDown = async (e: KeyboardEvent) => {
   if (e.code === keyHandled.value) return;
   keyHandled.value = e.code;
 
+  const blur = () => {
+    keyHandled.value = "";
+    const target = e.target;
+    if (target instanceof HTMLElement) target.blur();
+  };
+
   if (e.code === "Backspace") {
     changeShortcut("");
+    window.$message.success("快捷键已删除");
+    blur();
     return;
   }
 
@@ -211,28 +233,40 @@ const onKeyDown = async (e: KeyboardEvent) => {
     .filter(Boolean)
     .join("+");
 
-  if (isRepeat(shortcut)) {
+  const formattedShortcut = !isGlobalFocus.value
+    ? shortcut
+    : (() => {
+        const key = isCtrl || isShift || isAlt ? shortcut : "CmdOrCtrl+Shift+" + keyCode;
+        return formatForGlobalShortcut(key);
+      })();
+
+  if (isSameShortcut(formattedShortcut)) {
+    window.$message.info("快捷键相同");
+    blur();
+    return;
+  }
+
+  if (isRepeat(formattedShortcut)) {
     window.$message.warning("快捷键设置冲突");
+    blur();
     return;
   }
 
   if (isGlobalFocus.value) {
-    const key = isCtrl || isShift || isAlt ? shortcut : "CmdOrCtrl+Shift+" + keyCode;
-    const globalShortcut = formatForGlobalShortcut(key);
-    if (!globalShortcut) return;
-
     // 检查占用
-    const isRegistered = await checkRegistered(globalShortcut);
+    const isRegistered = await checkRegistered(formattedShortcut);
     if (isRegistered) {
       window.$message.warning("快捷键已被占用");
     } else {
       window.$message.success("快捷键设置成功");
     }
-    changeShortcut(globalShortcut);
+    changeShortcut(formattedShortcut);
   } else {
     changeShortcut(shortcut);
     window.$message.success("快捷键设置成功");
   }
+
+  blur();
 };
 </script>
 

@@ -257,7 +257,7 @@ const placeholder = (word: string): RenderLine[] => [
     line: {
       startTime: 0,
       endTime: 0,
-      words: [{ word, startTime: 0, endTime: 0, romanWord: "" }],
+      words: [{ word, startTime: 0, endTime: 0 }],
       translatedLyric: "",
       romanLyric: "",
       isBG: false,
@@ -334,7 +334,6 @@ const renderLyricLines = computed<RenderLine[]>(() => {
               word: current.translatedLyric,
               startTime: current.startTime,
               endTime: safeEnd,
-              romanWord: "",
             },
           ],
           translatedLyric: "",

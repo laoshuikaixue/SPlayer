@@ -42,14 +42,11 @@ class TaskbarLyricWindow {
   private registryWatcher: RegistryWatcher | null = null;
   private uiaWatcher: UiaWatcher | null = null;
   private trayWatcher: TrayWatcher | null = null;
-  private currentWidth = 300;
   private themeListener: (() => void) | null = null;
   private animationTimer: NodeJS.Timeout | null = null;
   private service: TaskbarService | null = null;
   private useAnimation = false;
   private isNativeDisposed = false;
-  private contentWidth = 300;
-  private maxWidthPercent = 30;
   private isFadingOut = false;
   private shouldBeVisible = false;
 
@@ -88,13 +85,16 @@ class TaskbarLyricWindow {
 
     const primaryDisplay = screen.getPrimaryDisplay();
     const maxWindowWidth = primaryDisplay.workAreaSize.width;
+    // 初始尺寸故意开大（覆盖任何可能的任务栏宽高），避免 transparent+SetParent 后
+    // Chromium 合成器视口不随 setBounds 增长、超出初始尺寸区域因 alpha=0 吞掉鼠标事件
+    // （表现为"只有前面一点点可以操作"）。后续 setBounds 只做缩小，视口始终覆盖整个 HWND
     this.win = createWindow({
-      width: this.currentWidth,
-      height: 48,
-      minWidth: 100,
-      minHeight: 30,
+      width: 3000,
+      height: 200,
+      minWidth: 0,
+      minHeight: 0,
       maxWidth: maxWindowWidth,
-      maxHeight: 100,
+      maxHeight: 200,
       type: "toolbar",
       frame: false,
       transparent: true,
@@ -149,9 +149,9 @@ class TaskbarLyricWindow {
     this.win.once("ready-to-show", () => {
       if (this.win) {
         this.embed();
-        if (this.shouldBeVisible) {
-          this.win.show();
-        }
+        // 不在此处 show，让 applyLayout 首次 setBounds 到正确尺寸后再触发 show
+        // （applyLayout 里 shouldBeVisible && !isVisible 的分支会处理），
+        // 避免 3000x200 的初始大窗口在屏幕上闪现
         this.updateLayout(false);
         sendTheme();
       }
@@ -198,11 +198,12 @@ class TaskbarLyricWindow {
     return this.win;
   }
 
-  setContentWidth(width: number) {
-    if (this.contentWidth !== width) {
-      this.contentWidth = width;
-      this.debouncedUpdateLayout();
-    }
+  /**
+   * 保留接口用于 manager 分发兼容（floating 模式使用）；taskbar 模式不需要根据
+   * 内容宽度动态收缩，窗口按 autoMaxWidth/maxWidth 设置占空间
+   */
+  setContentWidth(_width: number) {
+    // no-op
   }
 
   embed() {
@@ -215,32 +216,24 @@ class TaskbarLyricWindow {
     }
   }
 
-  private getMaxWidthPercent(screenWidth: number) {
+  /** 返回期望的 HWND 物理像素宽度（autoMaxWidth 开启时返回屏幕宽度，由 Rust 侧据可用空间裁剪） */
+  private getDesiredPhysicalWidth() {
     const store = useStore();
-    let maxWidthSetting = store.get("taskbar.maxWidth", 30);
-    if (maxWidthSetting > 100) {
-      // Assume it's pixels, convert to percent
-      const converted = Math.round((maxWidthSetting / screenWidth) * 100);
-      maxWidthSetting = Math.min(Math.max(converted, 10), 100);
-      store.set("taskbar.maxWidth", maxWidthSetting);
-      return maxWidthSetting;
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const scaleFactor = primaryDisplay.scaleFactor;
+    const autoMaxWidth = store.get("taskbar.autoMaxWidth", true);
+    if (autoMaxWidth) {
+      // 尽量撑满可用空间
+      return Math.round(primaryDisplay.workAreaSize.width * scaleFactor);
     }
-    return Math.min(Math.max(maxWidthSetting, 10), 100);
+    const maxWidthLogical = store.get("taskbar.maxWidth", 400);
+    return Math.round(maxWidthLogical * scaleFactor);
   }
 
   updateLayout(animate: boolean = false) {
     if (!this.win || !this.service) return;
     this.useAnimation = animate;
-
-    const primaryDisplay = screen.getPrimaryDisplay();
-    this.maxWidthPercent = this.getMaxWidthPercent(primaryDisplay.workAreaSize.width);
-    const scaleFactor = primaryDisplay.scaleFactor;
-    const maxWidthSetting = Math.round(
-      (primaryDisplay.workAreaSize.width * this.maxWidthPercent) / 100,
-    );
-    const requestWidth = Math.round(maxWidthSetting * scaleFactor);
-
-    this.service.update(requestWidth);
+    this.service.update(this.getDesiredPhysicalWidth());
   }
 
   private applyLayout(layout: TaskbarLayout | null) {
@@ -256,17 +249,13 @@ class TaskbarLyricWindow {
       const scaleFactor = primaryDisplay.scaleFactor;
       const store = useStore();
       const GAP = store.get("taskbar.margin", 10) * scaleFactor;
-      const maxWidthSetting = Math.round(
-        (primaryDisplay.workAreaSize.width * this.maxWidthPercent) / 100,
-      );
       const positionSetting = store.get("taskbar.position", "automatic") as TaskbarConfig["position"];
-      const autoShrink = store.get("taskbar.autoShrink", false);
-      const MAX_WIDTH_PHYSICAL = autoShrink
-        ? Math.min(maxWidthSetting, this.contentWidth) * scaleFactor
-        : maxWidthSetting * scaleFactor;
-      const minWidthPercent = Math.min(Math.max(store.get("taskbar.minWidth", 10), 0), 50);
-      const MIN_WIDTH_PHYSICAL =
-        Math.round((primaryDisplay.workAreaSize.width * minWidthPercent) / 100) * scaleFactor;
+      // autoMaxWidth 开启时无上限（撑满可用空间），关闭时按设置的像素值（逻辑像素）限制
+      const autoMaxWidth = store.get("taskbar.autoMaxWidth", true);
+      const maxWidthLogical = store.get("taskbar.maxWidth", 400);
+      const MAX_WIDTH_PHYSICAL = autoMaxWidth
+        ? Number.POSITIVE_INFINITY
+        : maxWidthLogical * scaleFactor;
 
       let targetBounds: Electron.Rectangle = {
         x: 0,
@@ -303,8 +292,9 @@ class TaskbarLyricWindow {
         const finalPhysicalY = 0;
         let finalPhysicalWidth = 0;
 
+        // 取可用空间与最大宽度限制的较小值；空间 <= 0 时返回 0 表示该侧不可用
         const clampWidth = (space: number) => {
-          if (space < MIN_WIDTH_PHYSICAL) return 0;
+          if (space <= 0) return 0;
           return Math.min(space, MAX_WIDTH_PHYSICAL);
         };
 
@@ -319,8 +309,8 @@ class TaskbarLyricWindow {
           finalPhysicalX = effectiveRightAnchor - finalPhysicalWidth - GAP;
           shouldCenter = false; // Right Align
         } else if (isCentered) {
-          // 自动判断 (Win11 居中)
-          if (leftSpaceNet >= MIN_WIDTH_PHYSICAL) {
+          // 自动判断 (Win11 居中): 选空间大的一侧
+          if (leftSpaceNet >= rightSpaceNet && leftSpaceNet > 0) {
             finalPhysicalWidth = clampWidth(leftSpaceNet);
             finalPhysicalX = widgetsRightEdge + GAP;
             shouldCenter = true; // Left Align
@@ -336,15 +326,11 @@ class TaskbarLyricWindow {
           shouldCenter = false; // Right Align
         }
 
-        // processLog.info(finalPhysicalWidth, finalPhysicalX);
-
         if (finalPhysicalWidth <= 0) {
           processLog.warn("[TaskbarLyric] 无可用空间");
           this.win.hide();
           return;
         }
-
-        this.currentWidth = Math.round(finalPhysicalWidth / scaleFactor);
 
         targetBounds = {
           x: finalPhysicalX,
