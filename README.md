@@ -1,3 +1,8 @@
+> [!CAUTION]
+> # 本项目停止维护
+> 后续版本请使用 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) 
+
+
 <div align="center">
 <img alt="logo" height="100" width="100" src="public/icons/favicon.png" />
 <h2> SPlayer </h2>
