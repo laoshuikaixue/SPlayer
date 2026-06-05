@@ -85,7 +85,7 @@ const initIpc = () => {
     );
 
     // 给任务栏歌词初始数据
-window.electron.ipcRenderer.on(TASKBAR_IPC_CHANNELS.REQUEST_DATA, async () => {
+    window.electron.ipcRenderer.on(TASKBAR_IPC_CHANNELS.REQUEST_DATA, async () => {
       const musicStore = useMusicStore();
       const statusStore = useStatusStore();
 
@@ -140,6 +140,9 @@ window.electron.ipcRenderer.on(TASKBAR_IPC_CHANNELS.REQUEST_DATA, async () => {
       const statusStore = useStatusStore();
       if (player) {
         const { name, artist } = getPlayerInfoObj() || {};
+        const songLyric = statusStore.lyricLoading
+          ? { lrcData: [], yrcData: [] }
+          : toRaw(musicStore.songLyric);
         window.electron.ipcRenderer.send(
           "desktop-lyric:update-data",
           cloneDeep({
@@ -149,8 +152,8 @@ window.electron.ipcRenderer.on(TASKBAR_IPC_CHANNELS.REQUEST_DATA, async () => {
             currentTime: statusStore.currentTime,
             songId: musicStore.playSong?.id,
             songOffset: statusStore.getSongOffset(musicStore.playSong?.id),
-            lrcData: musicStore.songLyric.lrcData ?? [],
-            yrcData: musicStore.songLyric.yrcData ?? [],
+            lrcData: songLyric.lrcData ?? [],
+            yrcData: songLyric.yrcData ?? [],
             lyricIndex: statusStore.lyricIndex,
             lyricLoading: statusStore.lyricLoading,
           }),

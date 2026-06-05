@@ -72,8 +72,6 @@ export interface StoreType {
       enabled: boolean;
     };
   };
-  /** 更新通道 */
-  updateChannel?: "stable" | "nightly";
 }
 
 /**
@@ -118,7 +116,6 @@ export const useStore = () => {
       },
       downloadThreadCount: 8,
       enableDownloadHttp2: true,
-      updateChannel: "stable",
     },
   });
 };
