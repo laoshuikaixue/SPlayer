@@ -100,7 +100,7 @@ export const toggleDesktopLyric = (show: boolean) => sendIpc("desktop-lyric:togg
  * @param show 是否显示
  */
 export const setTaskbarLyricShow = (show: boolean) =>
-  sendIpc(TASKBAR_IPC_CHANNELS.SET_OPTION, { enabled: show }, true);
+  sendIpc(TASKBAR_IPC_CHANNELS.SET_VISIBLE, show);
 
 /**
  * 向歌词任务栏等外部窗口广播通用的播放状态事件

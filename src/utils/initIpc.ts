@@ -2,7 +2,7 @@ import { usePlayerController } from "@/core/player/PlayerController";
 import * as playerIpc from "@/core/player/PlayerIpc";
 import { useDataStore, useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import type { SettingType } from "@/types/main";
-import { TASKBAR_IPC_CHANNELS, type TaskbarConfig } from "@/types/shared";
+import { TASKBAR_IPC_CHANNELS, type TaskbarLyricSettings } from "@/types/shared";
 import { handleProtocolUrl } from "@/utils/protocol";
 import { cloneDeep } from "lodash-es";
 import { toRaw } from "vue";
@@ -92,7 +92,7 @@ const initIpc = () => {
       const { name, artist } = getPlayerInfoObj() || {};
       const cover = musicStore.getSongCover("s") || "";
 
-      const configPayload: TaskbarConfig =
+      const configPayload: TaskbarLyricSettings =
         (await window.electron.ipcRenderer.invoke(TASKBAR_IPC_CHANNELS.GET_OPTION)) ?? {};
 
       const hasYrc = (musicStore.songLyric.yrcData?.length ?? 0) > 0;

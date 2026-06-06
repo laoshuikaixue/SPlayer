@@ -55,14 +55,10 @@ const config: Configuration = {
     target: [
       // 安装版
       {
-        target: "nsis",
-        arch: ["x64", "arm64"],
-      },
+        target: "nsis",      },
       // 打包版
       {
-        target: "portable",
-        arch: ["x64", "arm64"],
-      },
+        target: "portable",      },
     ],
     // 注册协议
     protocols: [
@@ -133,14 +129,10 @@ const config: Configuration = {
     target: [
       // DMG 安装版
       {
-        target: "dmg",
-        arch: ["x64", "arm64"],
-      },
+        target: "dmg",      },
       // 压缩包安装版
       {
-        target: "zip",
-        arch: ["x64", "arm64"],
-      },
+        target: "zip",      },
     ],
   },
   // Linux 平台配置
@@ -155,24 +147,16 @@ const config: Configuration = {
     target: [
       // Pacman 包管理器
       {
-        target: "pacman",
-        arch: ["x64", "arm64"],
-      },
+        target: "pacman",      },
       // AppImage 格式
       {
-        target: "AppImage",
-        arch: ["x64", "arm64"],
-      },
+        target: "AppImage",      },
       // Debian 包管理器
       {
-        target: "deb",
-        arch: ["x64", "arm64"],
-      },
+        target: "deb",      },
       // RPM 包管理器
       {
-        target: "rpm",
-        arch: ["x64", "arm64"],
-      },
+        target: "rpm",      },
       // Snap 包管理器（仅支持 x64 架构）
       // {
       //   target: "snap",
@@ -180,9 +164,7 @@ const config: Configuration = {
       // },
       // 压缩包格式
       {
-        target: "tar.gz",
-        arch: ["x64", "arm64"],
-      },
+        target: "tar.gz",      },
     ],
     // 维护者信息
     maintainer: "imsyy.top",

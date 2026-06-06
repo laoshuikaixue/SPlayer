@@ -9,6 +9,11 @@ on:
 env:
   NODE_VERSION: 22.x
 
+# 同一个 tag 的发布串行执行，避免并发上传资源产生竞态
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ===================================================================
   #  并行构建所有平台和架构
@@ -157,6 +162,18 @@ jobs:
               ;;
           esac
 
+      # 修复 Linux arm64 自动更新清单命名
+      - name: Rename Linux arm64 update manifest
+        if: matrix.target == 'linux-arm64'
+        shell: bash
+        run: |
+          if [ -f dist/latest-linux.yml ]; then
+            mv dist/latest-linux.yml dist/latest-linux-arm64.yml
+            echo "Renamed latest-linux.yml -> latest-linux-arm64.yml"
+          else
+            echo "dist/latest-linux.yml not found, skipping"
+          fi
+
       # 合并所有构建
       - name: Upload Artifact
         uses: actions/upload-artifact@v7
@@ -165,7 +182,7 @@ jobs:
           path: dist/*.*
 
   # ===================================================================
-  #  Generate Changelog & Release
+  #  Create & Publish GitHub Release
   # ===================================================================
   release:
     name: Create GitHub Release
@@ -180,97 +197,49 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate Changelog
-        id: changelog
-        shell: bash
-        run: |
-          # 获取前一个 tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          CURRENT_TAG=${GITHUB_REF#refs/tags/}
-
-          echo "Previous tag: $PREV_TAG"
-          echo "Current tag: $CURRENT_TAG"
-
-          if [ -z "$PREV_TAG" ]; then
-            echo "No previous tag found. Generating log from start."
-            git log --pretty=format:"- %s (%h)" > changelog_content.md
-          else
-            echo "Generating log from $PREV_TAG to $CURRENT_TAG"
-            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" > changelog_content.md
-          fi
-
-          # 翻译提交类型 (Conventional Commits)
-          sed -i -E 's/^- feat(\(.*\))?:/- ✨ 新增:/g' changelog_content.md
-          sed -i -E 's/^- fix(\(.*\))?:/- 🐞 修复:/g' changelog_content.md
-          sed -i -E 's/^- docs(\(.*\))?:/- 📝 文档:/g' changelog_content.md
-          sed -i -E 's/^- style(\(.*\))?:/- 💄 样式:/g' changelog_content.md
-          sed -i -E 's/^- refactor(\(.*\))?:/- ♻️ 重构:/g' changelog_content.md
-          sed -i -E 's/^- perf(\(.*\))?:/- ⚡️ 性能:/g' changelog_content.md
-          sed -i -E 's/^- test(\(.*\))?:/- ✅ 测试:/g' changelog_content.md
-          sed -i -E 's/^- build(\(.*\))?:/- 📦 构建:/g' changelog_content.md
-          sed -i -E 's/^- ci(\(.*\))?:/- 👷 CI:/g' changelog_content.md
-          sed -i -E 's/^- chore(\(.*\))?:/- 🔧 维护:/g' changelog_content.md
-          sed -i -E 's/^- revert(\(.*\))?:/- ⏪️ 回退:/g' changelog_content.md
-
-          # 1. 生成 CHANGELOG.md 的新条目
-          # 添加标题和日期
-          DATE=$(date +%Y-%m-%d)
-          echo -e "\n## [$CURRENT_TAG] - $DATE\n" > temp_header.md
-          cat temp_header.md changelog_content.md > new_entry.md
-
-          # 更新 CHANGELOG.md
-          if [ ! -f CHANGELOG.md ]; then
-            echo "# 更新日志" > CHANGELOG.md
-          fi
-
-          # 将新内容插入到 CHANGELOG.md 的第二行（标题之后）
-          head -n 1 CHANGELOG.md > temp_changelog.md
-          echo "" >> temp_changelog.md
-          cat new_entry.md >> temp_changelog.md
-          echo "" >> temp_changelog.md
-          tail -n +2 CHANGELOG.md >> temp_changelog.md
-          mv temp_changelog.md CHANGELOG.md
-
-          # 2. 生成 Release Body (release_notes.md)
-          cat changelog_content.md > release_notes.md
-
-          # 输出生成的日志内容供 Release 使用
-          cat release_notes.md
-
-      - name: Commit & Push Changelog
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add CHANGELOG.md
-          git commit -m "docs: 更新变更日志 $GITHUB_REF_NAME [skip ci]" || echo "No changes to commit"
-          git push origin HEAD:main || echo "Failed to push to main. This might happen if tag is not on main."
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
-      # 创建 GitHub Release 并上传所有产物
-      - name: Create GitHub Release and Upload Assets
-        uses: softprops/action-gh-release@v2
-        continue-on-error: true
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          body_path: release_notes.md
-          generate_release_notes: true
-          draft: false
-          # 发布为预发布
-          prerelease: false
-          # 全部上传
-          files: |
-            !artifacts/**/*-unpacked/**
-            artifacts/**/*.exe
-            artifacts/**/*.dmg
-            artifacts/**/*.zip
-            artifacts/**/*.AppImage
-            artifacts/**/*.deb
-            artifacts/**/*.rpm
-            artifacts/**/*.pacman
-            artifacts/**/*.snap
-            artifacts/**/*.tar.gz
-            artifacts/**/*.yml
-            artifacts/**/*.blockmap
+
+      # 整理待发布资源
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/jsyaml" js-yaml@4.1.0
+          NODE_PATH="$RUNNER_TEMP/jsyaml/node_modules" \
+            node .github/scripts/prepare-release-assets.cjs artifacts release-assets
+          echo "待发布资源："
+          ls -1 release-assets
+
+      # 用官方 gh CLI 确定性创建并发布 Release（替代有重复草稿/竞态问题的第三方 action）
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # 固定维护说明
+          cat > notes.md <<'EOF'
+          ## 本项目进入维护模式
+          > 项目已进入维护模式，后续仅进行必要的维护与重大问题修复，不再主动开发新功能
+          > 新功能及后续版本请移步 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next)
+
+          EOF
+          # 重跑场景
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes
+          fi
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes-file notes.md \
+            --generate-notes \
+            --verify-tag \
+            --draft \
+            release-assets/*
