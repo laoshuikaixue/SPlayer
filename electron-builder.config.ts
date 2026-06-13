@@ -55,10 +55,12 @@ const config: Configuration = {
     target: [
       // 安装版
       {
-        target: "nsis",      },
+        target: "nsis",
+      },
       // 打包版
       {
-        target: "portable",      },
+        target: "portable",
+      },
     ],
     // 注册协议
     protocols: [
@@ -129,10 +131,12 @@ const config: Configuration = {
     target: [
       // DMG 安装版
       {
-        target: "dmg",      },
+        target: "dmg",
+      },
       // 压缩包安装版
       {
-        target: "zip",      },
+        target: "zip",
+      },
     ],
   },
   // Linux 平台配置
@@ -147,16 +151,20 @@ const config: Configuration = {
     target: [
       // Pacman 包管理器
       {
-        target: "pacman",      },
+        target: "pacman",
+      },
       // AppImage 格式
       {
-        target: "AppImage",      },
+        target: "AppImage",
+      },
       // Debian 包管理器
       {
-        target: "deb",      },
+        target: "deb",
+      },
       // RPM 包管理器
       {
-        target: "rpm",      },
+        target: "rpm",
+      },
       // Snap 包管理器（仅支持 x64 架构）
       // {
       //   target: "snap",
@@ -164,7 +172,8 @@ const config: Configuration = {
       // },
       // 压缩包格式
       {
-        target: "tar.gz",      },
+        target: "tar.gz",
+      },
     ],
     // 维护者信息
     maintainer: "imsyy.top",
@@ -177,6 +186,7 @@ const config: Configuration = {
         MimeType: "x-scheme-handler/orpheus;",
       },
     },
+    syncDesktopName: true,
   },
   // AppImage 特定配置
   appImage: {
